@@ -28,15 +28,15 @@
  * the config you want - ie #define EXAMPLE_WIFI_SSID "mywifissid"
  */
 #define LEN_MAC_ADDR 20
-#define EXAMPLE_ESP_WIFI_SSID      "ESP32-AP"
-#define EXAMPLE_ESP_WIFI_PASS      "esp32-ap"
+#define EXAMPLE_ESP_WIFI_SSID      "Ouais ouais ouais"
+#define EXAMPLE_ESP_WIFI_PASS      "testtesttest"
 #define EXAMPLE_ESP_WIFI_CHANNEL   1
 #define EXAMPLE_MAX_STA_CONN       16
 
 #define CSI_QUEUE_SIZE             32
 // #define HOST_IP_ADDR               "192.168.4.2" // the ip addr of the host computer.
-#define TARGET_HOSTNAME            "RuichunMacBook-Pro" // put your computer mDNS name here.
-#define HOST_UDP_PORT              8848
+#define TARGET_HOSTNAME            "MacBook-Pro-de-Antoine" // put your computer mDNS name here.
+#define HOST_UDP_PORT              3333
 
 
 
@@ -47,11 +47,9 @@ static char *target_host_ipv4 = NULL;
 static xQueueHandle csi_info_queue;
 
 static const uint8_t PEER_NODE_NUM = 4; // self is also included.
-static const char peer_mac_list[8][20] = {
-    "3c:61:05:4c:36:cd", // esp32 official dev board 0, as soft ap
-    "3c:61:05:4c:3c:28", // esp32 official dev board 1
-    "08:3a:f2:6c:d3:bc", // esp32 unofficial dev board 0
-    "08:3a:f2:6e:05:94", // esp32 unofficial dev board 1
+static const char peer_mac_list[8][20] = { // esp32 official dev board 0, as soft ap
+    "08:b6:1f:80:ff:2c",
+    "c8:f0:9e:f1:b5:f4",
 };
 
 static void csi_handler_task(void *pvParameter);

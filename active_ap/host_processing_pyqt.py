@@ -243,16 +243,16 @@ class App(QtWidgets.QMainWindow):
         self.mainbox.addWidget(self.pw2, row=0, col=1)
         self.pw2.setLabel('left', 'CSI', units='dB')
         self.pw2.setLabel('bottom', 'subcarriers [-58, -2] and [2, 58] ', units=None)
-        self.pw2.setXRange(0, CSI_LEN)
+        self.pw2.setXRange(-58, CSI_LEN-58)
         self.pw2.setYRange(20, 70)
 
         # set up Plot 3 widget
         self.pw3= pg.PlotWidget(name="Plot3")
         curve_csi_phase_list = self.pw3.plot(pen=(0,3))
         self.mainbox.addWidget(self.pw3, row=0, col=2)
-        self.pw1.setLabel('left', 'Phase', units='radian')
-        self.pw1.setLabel('bottom', 'Time', units=None)
-        self.pw1.setYRange(20, 70)
+        self.pw3.setLabel('left', 'Phase', units='radian')
+        self.pw3.setLabel('bottom', 'Time', units=None)
+        self.pw3.setYRange(-4, 4)
 
         # # set up image widget
         # self.img_w = pg.GraphicsLayoutWidget()
