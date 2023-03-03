@@ -5,7 +5,8 @@ import socket
 import collections
 import numpy as np
 import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtGui
+from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
+import math as m
 
 import requests
 import PIL.Image
@@ -13,10 +14,10 @@ from io import BytesIO
 import subprocess
 
 # whether turn on motion detection and call video streaming
-DETECTION_ON = True
+DETECTION_ON = False
 
-UDP_IP = "192.168.4.2" # put your computer's ip in WiFi netowrk here
-UDP_PORT = 8848
+UDP_IP = "192.168.4.4" # put your computer's ip in WiFi netowrk here
+UDP_PORT = 3333
 
 QUEUE_LEN = 50
 CSI_LEN = 57 * 2
@@ -32,6 +33,7 @@ curve_rssi_list = []
 scatter_rssi_list = []
 text_rssi_list = []
 curve_csi_list = []
+curve_csi_phase_list = []
 
 LOG_LEN = 3
 TEST_MIN_NUM = 100
@@ -84,12 +86,16 @@ def add_new_node (pyqt_app, node_id):
         return
     rssi_que_list.append( collections.deque(np.zeros(QUEUE_LEN)) )
     csi_points_list.append( np.zeros(CSI_LEN) )
+    csi_phase_list.append(np.zeros(CSI_LEN))
     # new rssi curve
     curve_rssi_list.append( pyqt_app.pw1.plot(pen=(node_id, 3)) ) # append SNR curve
 
 
     # new csi curve
-    curve_csi_list.append( pyqt_app.pw2.plot(pen=(node_id, 3)) ) # append SNR curve
+    curve_csi_list.append( pyqt_app.pw2.plot(pen=(node_id, 3)) ) # append CSI curve
+
+    # new phase curve
+    curve_csi_phase_list.append (pyqt_app.pw3.plot(pen=(node_id, 3))) # append phase curve
 
 
 def parse_data_packet (pyqt_app, data) :
@@ -139,6 +145,7 @@ def cook_csi_data (rx_ctrl_info, raw_csi_data) :
     # Each channel frequency response of sub-carrier is recorded by two bytes of signed characters. 
     # The first one is imaginary part and the second one is real part.
     raw_csi_data = [ (raw_csi_data[2*i] * 1j + raw_csi_data[2*i + 1]) for i in range(int(len(raw_csi_data) / 2)) ]
+    csi_phase = [ m.atan2(raw_csi_data[2*i],raw_csi_data[2*i + 1]) for i in range(int(len(raw_csi_data) / 2)) ]
     raw_csi_array = np.array(raw_csi_data)    
 
     ## Note:this part of SNR computation may not be accurate.
@@ -170,7 +177,7 @@ def cook_csi_data (rx_ctrl_info, raw_csi_data) :
     assert(len(cooked_csi_array) == CSI_LEN)
     
     print("RSSI = {} dBm\n".format(rssi))
-    return (snr_db, cooked_csi_array)
+    return (snr_db, cooked_csi_array, csi_phase)
 
 def update_esp32_data(pyqt_app):
     # recv UDP packet aync!
@@ -195,7 +202,7 @@ def update_esp32_data(pyqt_app):
     print("Got a HT 40MHz packet ...")
 
     # prepare csi data
-    (rssi, csi_data) = cook_csi_data(rx_ctrl_data, raw_csi_data)
+    (rssi, csi_data, csi_phase) = cook_csi_data(rx_ctrl_data, raw_csi_data)
 
     # update RSSI
     print("node id = ", node_id)
@@ -203,11 +210,13 @@ def update_esp32_data(pyqt_app):
     rssi_que_list[node_id].append( rssi )
     # update CSI
     csi_points_list[node_id] = 10 * np.log10(np.abs(csi_data)**2 + 0.1) # + 0.1 to avoid log(0)
+    # update phase
+    csi_phase_list[node_id]=csi_phase
 
     return node_id
 
 
-class App(QtGui.QMainWindow):
+class App(QtWidgets.QMainWindow):
     def __init__(self, parent=None):
         super(App, self).__init__(parent)
 
@@ -237,6 +246,14 @@ class App(QtGui.QMainWindow):
         self.pw2.setXRange(0, CSI_LEN)
         self.pw2.setYRange(20, 70)
 
+        # set up Plot 3 widget
+        self.pw3= pg.PlotWidget(name="Plot3")
+        curve_csi_phase_list = self.pw3.plot(pen=(0,3))
+        self.mainbox.addWidget(self.pw3, row=0, col=2)
+        self.pw1.setLabel('left', 'Phase', units='radian')
+        self.pw1.setLabel('bottom', 'Time', units=None)
+        self.pw1.setYRange(20, 70)
+
         # # set up image widget
         # self.img_w = pg.GraphicsLayoutWidget()
         # self.mainbox.addWidget(self.img_w, row=0, col=2)
@@ -249,7 +266,7 @@ class App(QtGui.QMainWindow):
         # self.view.addItem(self.img)
 
         # a text label widget for info dispaly
-        self.label = QtGui.QLabel()
+        self.label = QtWidgets.QLabel()
         self.mainbox.addWidget(self.label, row=1, col=0)
 
         #### Set Data  #####################
@@ -286,16 +303,11 @@ class App(QtGui.QMainWindow):
 
         curve_rssi_list[node_id].setData(x=self.disp_time, y=rssi_que_list[node_id], pen=(node_id, 3))
         curve_csi_list[node_id].setData(y=csi_points_list[node_id], pen=(node_id, 3))
+        curve_csi_phase_list[node_id].setData(y=csi_phase_list[node_id], pen=(node_id, 3))
 
         self.calculate_fps()
         self.update_label()
 
-        if DETECTION_ON and TARGET_NODE == node_id:
-            self.baseline_csi_curve.setData(y=csi_db_baseline, pen=(10, 3))
-            ret = crossing_decction(csi_points_list[node_id])
-            if ret:
-                subprocess.Popen(["python3", "camera_streaming.py"])
-                return
 
         # schedule the next update call
         QtCore.QTimer.singleShot(PLOT_FRESH_INTERVAL, self._update)
@@ -305,6 +317,7 @@ if __name__ == '__main__':
     # a queue to hold SNR values
     rssi_que_list = [collections.deque(np.zeros(QUEUE_LEN))]
     csi_points_list = [np.zeros(CSI_LEN)]
+    csi_phase_list = [np.zeros(CSI_LEN//2)]
 
     csi_data_log = collections.deque()
     csi_db_baseline = np.zeros(CSI_LEN)
@@ -315,7 +328,7 @@ if __name__ == '__main__':
     sock.bind((UDP_IP, UDP_PORT))
     sock.settimeout(1)
 
-    app = QtGui.QApplication(sys.argv)
+    app = QtWidgets.QApplication(sys.argv)
     thisapp = App()
     thisapp.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
