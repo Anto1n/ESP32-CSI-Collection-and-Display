@@ -133,9 +133,14 @@ def parse_data_packet (pyqt_app, data) :
             raw_csi_len = int(items[1][tmp_pos+6:])
             # parse csi raw data
             raw_csi_data = parse_data_line(lines[l_count + 1], raw_csi_len)
-            dict = {'csv': raw_csi_data}
-            df=pd.DataFrame(dict)
-            df.to_csv('test.csv', mode='a', index=False, header=False)
+            
+            keys=range(len(raw_csi_data))
+            dicts={}
+            for i in keys :
+                dicts[i+1]=raw_csi_data[i]
+
+            df=pd.DataFrame(dicts,index=[0])
+            df.to_csv('~/Desktop/data_collection/move_evr_5_sec_2_29cm.csv', mode='a', index=False, header=False)
 
     # a newline to separate packets
     print()
@@ -315,6 +320,7 @@ class App(QtWidgets.QMainWindow):
             return
 
         curve_rssi_list[node_id].setData(x=self.disp_time, y=rssi_que_list[node_id], pen=(node_id, 3))
+        
       
         curve_csi_list[node_id].setData(y=csi_points_list[node_id], pen=(node_id, 3))
         
