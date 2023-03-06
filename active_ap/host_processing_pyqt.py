@@ -7,6 +7,7 @@ import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
 import math as m
+import pandas as pd
 
 import requests
 import PIL.Image
@@ -16,7 +17,7 @@ import subprocess
 # whether turn on motion detection and call video streaming
 DETECTION_ON = False
 
-UDP_IP = "192.168.4.4" # put your computer's ip in WiFi netowrk here
+UDP_IP = "192.168.4.3" # put your computer's ip in WiFi netowrk here
 UDP_PORT = 3333
 
 QUEUE_LEN = 50
@@ -102,12 +103,14 @@ def parse_data_packet (pyqt_app, data) :
     data_str = str(data, encoding="ascii")
     lines = data_str.splitlines()
     node_id = -1
+    
     for l_count in range(len(lines)):
         line = lines[l_count]
-        print(line)
+        
         items = line.split(",")
 
         if items[0].find("mac =") >= 0:
+            
             mac_addr = items[0][items[0].find("mac =") + 5:]
             # if a new mac addr
             if not mac_addr in node_mac_list:
@@ -130,6 +133,10 @@ def parse_data_packet (pyqt_app, data) :
             raw_csi_len = int(items[1][tmp_pos+6:])
             # parse csi raw data
             raw_csi_data = parse_data_line(lines[l_count + 1], raw_csi_len)
+            dict = {'csv': raw_csi_data}
+            df=pd.DataFrame(dict)
+            df.to_csv('test.csv', mode='a', index=False, header=False)
+
     # a newline to separate packets
     print()
 
@@ -144,9 +151,12 @@ def cook_csi_data (rx_ctrl_info, raw_csi_data) :
 
     # Each channel frequency response of sub-carrier is recorded by two bytes of signed characters. 
     # The first one is imaginary part and the second one is real part.
-    raw_csi_data = [ (raw_csi_data[2*i] * 1j + raw_csi_data[2*i + 1]) for i in range(int(len(raw_csi_data) / 2)) ]
     csi_phase = [ m.atan2(raw_csi_data[2*i],raw_csi_data[2*i + 1]) for i in range(int(len(raw_csi_data) / 2)) ]
-    raw_csi_array = np.array(raw_csi_data)    
+    
+    raw_csi_data = [ (raw_csi_data[2*i] * 1j + raw_csi_data[2*i + 1]) for i in range(int(len(raw_csi_data) / 2)) ]
+    
+    raw_csi_array = np.array(raw_csi_data)
+    csi_phase_array = np.array(csi_phase)  
 
     ## Note:this part of SNR computation may not be accurate.
     #       The reason is that ESP32 may not provide a accurate noise floor value.
@@ -160,7 +170,7 @@ def cook_csi_data (rx_ctrl_info, raw_csi_data) :
     num_subcarrier = len(raw_csi_array)
     scale = np.sqrt((snr_abs / csi_sum) * num_subcarrier)
     raw_csi_array = raw_csi_array * scale
-    print("SNR = {} dB".format(snr_db))
+    # print("SNR = {} dB".format(snr_db))
     #
 
     # Note:
@@ -172,12 +182,14 @@ def cook_csi_data (rx_ctrl_info, raw_csi_data) :
     # Signal is transmitted on sub-carriers -58 to -2 and 2 to 58.
     assert(len(raw_csi_array) == 64 * 3)
     cooked_csi_array = raw_csi_array[64:]
+    cooked_phase_array = csi_phase_array[64:]
     # rearrange to -58 ~ -2 and 2 ~ 58.
     cooked_csi_array = np.concatenate((cooked_csi_array[-58:-1], cooked_csi_array[2:59]))
+    cooked_phase_array = np.concatenate((cooked_phase_array[-58:-1], cooked_phase_array[2:59]))
     assert(len(cooked_csi_array) == CSI_LEN)
     
-    print("RSSI = {} dBm\n".format(rssi))
-    return (snr_db, cooked_csi_array, csi_phase)
+    # print("RSSI = {} dBm\n".format(rssi))
+    return (snr_db, cooked_csi_array, cooked_phase_array)
 
 def update_esp32_data(pyqt_app):
     # recv UDP packet aync!
@@ -199,19 +211,20 @@ def update_esp32_data(pyqt_app):
 
     # node_id not assigned, error
     assert(node_id >= 0)
-    print("Got a HT 40MHz packet ...")
+    #print("Got a HT 40MHz packet ...")
 
     # prepare csi data
     (rssi, csi_data, csi_phase) = cook_csi_data(rx_ctrl_data, raw_csi_data)
 
     # update RSSI
-    print("node id = ", node_id)
+    #print("node id = ", node_id)
     rssi_que_list[node_id].popleft()
     rssi_que_list[node_id].append( rssi )
     # update CSI
+
     csi_points_list[node_id] = 10 * np.log10(np.abs(csi_data)**2 + 0.1) # + 0.1 to avoid log(0)
     # update phase
-    csi_phase_list[node_id]=csi_phase
+    csi_phase_list[node_id] = csi_phase
 
     return node_id
 
@@ -222,7 +235,7 @@ class App(QtWidgets.QMainWindow):
 
         global csi_db_baseline
 
-        #### Create Gui Elements ###########
+        #### Create Widget Elements ###########
         self.mainbox = pg.LayoutWidget()
         self.setCentralWidget(self.mainbox)
 
@@ -247,12 +260,12 @@ class App(QtWidgets.QMainWindow):
         self.pw2.setYRange(20, 70)
 
         # set up Plot 3 widget
-        self.pw3= pg.PlotWidget(name="Plot3")
-        curve_csi_phase_list = self.pw3.plot(pen=(0,3))
-        self.mainbox.addWidget(self.pw3, row=0, col=2)
-        self.pw3.setLabel('left', 'Phase', units='radian')
-        self.pw3.setLabel('bottom', 'Time', units=None)
-        self.pw3.setYRange(-4, 4)
+        #self.pw3= pg.PlotWidget(name="Plot3")
+        #curve_csi_phase_list.append(self.pw3.plot(pen=(0,3)))
+        #self.mainbox.addWidget(self.pw3, row=0, col=2)
+        #self.pw3.setLabel('left', 'Phase', units='radian')
+        #self.pw3.setLabel('bottom', 'Time', units=None)
+        #self.pw3.setYRange(-4, 4)
 
         # # set up image widget
         # self.img_w = pg.GraphicsLayoutWidget()
@@ -284,7 +297,7 @@ class App(QtWidgets.QMainWindow):
         now = time.time()
         dt = (now-self.lastupdate)
         if dt <= 0:
-            dt = 0.000000000001
+            dt = 0.000000000001  #prevent null division
         fps2 = 1.0 / dt
         self.lastupdate = now
         self.fps = self.fps * 0.9 + fps2 * 0.1
@@ -302,8 +315,10 @@ class App(QtWidgets.QMainWindow):
             return
 
         curve_rssi_list[node_id].setData(x=self.disp_time, y=rssi_que_list[node_id], pen=(node_id, 3))
+      
         curve_csi_list[node_id].setData(y=csi_points_list[node_id], pen=(node_id, 3))
-        curve_csi_phase_list[node_id].setData(y=csi_phase_list[node_id], pen=(node_id, 3))
+        
+        #curve_csi_phase_list[node_id].setData(y=csi_phase_list[node_id], pen=(node_id, 3))
 
         self.calculate_fps()
         self.update_label()
