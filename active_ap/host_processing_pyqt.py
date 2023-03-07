@@ -133,14 +133,6 @@ def parse_data_packet (pyqt_app, data) :
             raw_csi_len = int(items[1][tmp_pos+6:])
             # parse csi raw data
             raw_csi_data = parse_data_line(lines[l_count + 1], raw_csi_len)
-            
-            keys=range(len(raw_csi_data))
-            dicts={}
-            for i in keys :
-                dicts[i+1]=raw_csi_data[i]
-
-            df=pd.DataFrame(dicts,index=[0])
-            df.to_csv('~/Desktop/data_collection/move_evr_5_sec_2_29cm.csv', mode='a', index=False, header=False)
 
     # a newline to separate packets
     print()
@@ -153,7 +145,11 @@ def cook_csi_data (rx_ctrl_info, raw_csi_data) :
     rssi = rx_ctrl_info[0]  # dbm
     noise_floor = rx_ctrl_info[11] # dbm. The document says unit is 0.25 dbm but it does not make sense.
     # do not know AGC
-
+    keys=range(len(raw_csi_data))
+    dicts={'timestamp':time.time(), 'rssi':rssi, 'noise':noise_floor}
+    for i in keys :
+        dicts[i+1]=raw_csi_data[i]
+    
     # Each channel frequency response of sub-carrier is recorded by two bytes of signed characters. 
     # The first one is imaginary part and the second one is real part.
     csi_phase = [ m.atan2(raw_csi_data[2*i],raw_csi_data[2*i + 1]) for i in range(int(len(raw_csi_data) / 2)) ]
@@ -194,6 +190,11 @@ def cook_csi_data (rx_ctrl_info, raw_csi_data) :
     assert(len(cooked_csi_array) == CSI_LEN)
     
     # print("RSSI = {} dBm\n".format(rssi))
+    
+    dicts['amplitude']=snr_db    
+    df=pd.DataFrame(dicts,index=[0])
+    df.to_csv('~/Desktop/data_collection_2/moving_back_and_forth_2_claquettes_1.csv', mode='a', index=False, header=False)
+
     return (snr_db, cooked_csi_array, cooked_phase_array)
 
 def update_esp32_data(pyqt_app):

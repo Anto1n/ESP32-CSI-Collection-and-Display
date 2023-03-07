@@ -4,7 +4,7 @@ import collections
 import matplotlib.pyplot as plt
 import time
 
-UDP_IP = "192.168.4.2"
+UDP_IP = "192.168.4.3"
 UDP_PORT = 8848
 
 QUEUE_LEN = 50
