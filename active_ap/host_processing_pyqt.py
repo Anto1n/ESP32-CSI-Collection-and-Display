@@ -86,6 +86,7 @@ def add_new_node (pyqt_app, node_id):
     if node_id == 0:
         return
     rssi_que_list.append( collections.deque(np.zeros(QUEUE_LEN)) )
+    print(type(rssi_que_list))
     csi_points_list.append( np.zeros(CSI_LEN) )
     csi_phase_list.append(np.zeros(CSI_LEN))
     # new rssi curve
@@ -193,7 +194,7 @@ def cook_csi_data (rx_ctrl_info, raw_csi_data) :
     
     dicts['amplitude']=snr_db    
     df=pd.DataFrame(dicts,index=[0])
-    df.to_csv('~/Desktop/data_collection_2/moving_back_and_forth_2_claquettes_1.csv', mode='a', index=False, header=False)
+    df.to_csv('~/Desktop/data_collection_2/moving_lateral_periodic_2_claquettes_1.csv', mode='a', index=False, header=False)
 
     return (snr_db, cooked_csi_array, cooked_phase_array)
 
@@ -262,7 +263,7 @@ class App(QtWidgets.QMainWindow):
         self.mainbox.addWidget(self.pw2, row=0, col=1)
         self.pw2.setLabel('left', 'CSI', units='dB')
         self.pw2.setLabel('bottom', 'subcarriers [-58, -2] and [2, 58] ', units=None)
-        self.pw2.setXRange(-58, CSI_LEN-58)
+        self.pw2.setXRange(0, CSI_LEN)
         self.pw2.setYRange(20, 70)
 
         # set up Plot 3 widget
@@ -320,9 +321,7 @@ class App(QtWidgets.QMainWindow):
             QtCore.QTimer.singleShot(PLOT_FRESH_INTERVAL, self._update)
             return
 
-        curve_rssi_list[node_id].setData(x=self.disp_time, y=rssi_que_list[node_id], pen=(node_id, 3))
-        
-      
+        curve_rssi_list[node_id].setData(x=self.disp_time, y=rssi_que_list[node_id], pen=(node_id, 3))    
         curve_csi_list[node_id].setData(y=csi_points_list[node_id], pen=(node_id, 3))
         
         #curve_csi_phase_list[node_id].setData(y=csi_phase_list[node_id], pen=(node_id, 3))
